@@ -42,8 +42,15 @@ function LoginForm() {
         return;
       }
 
-      // Restore pending package if customer came from checkout flow
-      if (typeof window !== "undefined") {
+      // Restore pending package ONLY if customer came from checkout flow
+      const isCheckoutLogin = Boolean(
+        searchParams.get("checkout") === "true" ||
+          searchParams.get("th") ||
+          returnUrl.includes("/confirm") ||
+          returnUrl.includes("/payment")
+      );
+
+      if (isCheckoutLogin && typeof window !== "undefined") {
         const pendingRaw = localStorage.getItem("tmf_pending_pool");
         if (pendingRaw) {
           try {

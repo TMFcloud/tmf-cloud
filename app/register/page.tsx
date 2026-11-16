@@ -20,6 +20,12 @@ function RegisterForm() {
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get("returnUrl") || "/dashboard";
 
+  // Check whether registration was explicitly initiated from hashrate checkout
+  const isCheckout = Boolean(
+    searchParams.get("checkout") === "true" ||
+      (searchParams.get("th") && searchParams.get("days"))
+  );
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -38,20 +44,44 @@ function RegisterForm() {
 
   const [pendingPackage, setPendingPackage] = useState<any | null>(null);
 
-  // Restore pending package info if available
+  // Restore pending package info ONLY if coming from checkout flow
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const pendingRaw = localStorage.getItem("tmf_pending_pool");
-      if (pendingRaw) {
-        try {
-          const parsed = JSON.parse(pendingRaw);
-          if (parsed && parsed.hashrateTh) {
-            setPendingPackage(parsed);
-          }
-        } catch {}
+      if (isCheckout) {
+        // Read from query params first
+        const thQuery = parseInt(searchParams.get("th") || "", 10);
+        const daysQuery = parseInt(searchParams.get("days") || "", 10);
+        const payQuery = searchParams.get("pay") || "USDT";
+
+        const pendingRaw = localStorage.getItem("tmf_pending_pool");
+        let poolData: any = null;
+        if (pendingRaw) {
+          try {
+            poolData = JSON.parse(pendingRaw);
+          } catch {}
+        }
+
+        const resolvedTh = !isNaN(thQuery) && thQuery >= 10 ? thQuery : poolData?.hashrateTh || 1000;
+        const resolvedDays = !isNaN(daysQuery) && daysQuery >= 30 ? daysQuery : poolData?.durationDays || 30;
+        const resolvedPay = payQuery === "BTC" || poolData?.paymentCurrency === "BTC" ? "BTC" : "USDT_TRC20";
+
+        setPendingPackage({
+          hashrateTh: resolvedTh,
+          durationDays: resolvedDays,
+          paymentCurrency: resolvedPay,
+          poolProvider: poolData?.poolProvider || "ViaBTC",
+          stratumUrl: poolData?.stratumUrl || "stratum+tcp://btc.viabtc.top:3333",
+          workerName: poolData?.workerName || "worker1",
+          workerPassword: poolData?.workerPassword || "x",
+        });
+      } else {
+        // Direct homepage registration: clear any stale pending package from localStorage
+        localStorage.removeItem("tmf_pending_pool");
+        localStorage.removeItem("tmf_active_order_id");
+        setPendingPackage(null);
       }
     }
-  }, []);
+  }, [isCheckout, searchParams]);
 
   // Handle Resend Cooldown Timer
   useEffect(() => {
@@ -76,9 +106,9 @@ function RegisterForm() {
       .catch(() => {});
   }, []);
 
-  // Calculated package price (WITHOUT "Locked")
-  const planHashrate = Number(pendingPackage?.hashrateTh || 10);
-  const planDuration = Number(pendingPackage?.durationDays || 30);
+  // Calculated package price (only applicable if isCheckout is true)
+  const planHashrate = Number(pendingPackage?.hashrateTh || 0);
+  const planDuration = Number(pendingPackage?.durationDays || 0);
   const estimatedPriceUsd = (planHashrate * planDuration * baseRate).toFixed(2);
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -93,8 +123,8 @@ function RegisterForm() {
     }
 
     try {
-      // 1. Submit to authoritative registration endpoint
-      // Stores original order in Supabase BEFORE sending verification email
+      // Direct registration passes flow: "direct" and pendingPackage: null
+      // Checkout registration passes flow: "checkout" and preserved package
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,15 +132,19 @@ function RegisterForm() {
           email,
           password,
           fullName,
-          pendingPackage: {
-            hashrateTh: planHashrate,
-            durationDays: planDuration,
-            paymentCurrency: pendingPackage?.paymentCurrency || "USDT_TRC20",
-            poolProvider: pendingPackage?.poolProvider || "ViaBTC",
-            stratumUrl: pendingPackage?.stratumUrl || "stratum+tcp://btc.viabtc.top:3333",
-            workerName: pendingPackage?.workerName || "worker1",
-            workerPassword: pendingPackage?.workerPassword || "x",
-          },
+          flow: isCheckout ? "checkout" : "direct",
+          pendingPackage:
+            isCheckout && pendingPackage
+              ? {
+                  hashrateTh: planHashrate,
+                  durationDays: planDuration,
+                  paymentCurrency: pendingPackage?.paymentCurrency || "USDT_TRC20",
+                  poolProvider: pendingPackage?.poolProvider || "ViaBTC",
+                  stratumUrl: pendingPackage?.stratumUrl || "stratum+tcp://btc.viabtc.top:3333",
+                  workerName: pendingPackage?.workerName || "worker1",
+                  workerPassword: pendingPackage?.workerPassword || "x",
+                }
+              : null,
         }),
       });
 
@@ -122,13 +156,13 @@ function RegisterForm() {
         return;
       }
 
-      // 2. Persist active order ID locally for fast client reference
-      if (data.orderId) {
+      // If this was a checkout registration, persist the newly created pending order
+      if (isCheckout && data.orderId) {
         setCreatedOrderId(data.orderId);
         localStorage.setItem("tmf_active_order_id", data.orderId);
       }
 
-      // 3. Transition UI to dedicated "Check Your Inbox" state
+      // Transition UI to dedicated "Check Your Inbox" state
       setSubmittedEmail(email.trim().toLowerCase());
       setSubmittedSuccess(true);
       setResendCooldown(45);
@@ -153,7 +187,8 @@ function RegisterForm() {
           email: submittedEmail,
           password,
           fullName,
-          pendingPackage,
+          flow: isCheckout ? "checkout" : "direct",
+          pendingPackage: isCheckout ? pendingPackage : null,
         }),
       });
       const data = await res.json();
@@ -201,59 +236,49 @@ function RegisterForm() {
                 <img
                   src="/tmf-logo.png"
                   alt="The Mining Future"
-                  className="h-8 w-auto object-contain"
+                  className="h-9 sm:h-10 w-auto object-contain drop-shadow-[0_0_15px_rgba(140,255,0,0.25)]"
                 />
               </Link>
             </div>
 
-            {/* Animated Glow Icon */}
-            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#8CFF00]/15 border-2 border-[#8CFF00] text-[#8CFF00] shadow-[0_0_25px_rgba(140,255,0,0.4)]">
-              <Mail className="h-7 w-7" />
+            {/* Glowing Mail Icon */}
+            <div className="relative mx-auto w-16 h-16 rounded-2xl bg-[#8CFF00]/15 border border-[#8CFF00]/40 flex items-center justify-center text-[#8CFF00] shadow-[0_0_30px_rgba(140,255,0,0.3)]">
+              <Mail className="w-8 h-8 stroke-[2.2]" />
+              <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#8CFF00] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#8CFF00]"></span>
+              </span>
             </div>
 
+            {/* Headline */}
             <div>
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                Check Your Email
+                Check Your Inbox
               </h2>
               <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
                 We sent a secure verification link to:
               </p>
-              <div className="mt-2 py-1.5 px-3 rounded-xl bg-slate-100 dark:bg-[#0F1622] border border-slate-200 dark:border-[#223044] text-xs font-mono font-bold text-slate-900 dark:text-[#8CFF00] select-all break-all">
+              <div className="mt-2 inline-block px-3 py-1 rounded-lg bg-slate-100 dark:bg-[#0E1522] border border-slate-200 dark:border-gray-800 text-xs font-mono font-bold text-slate-900 dark:text-[#8CFF00] break-all">
                 {submittedEmail}
               </div>
             </div>
 
-            {/* Selected Plan Badge (Without "Locked") */}
-            <div className="py-2 px-3 rounded-xl bg-[#8CFF00]/10 border border-[#8CFF00]/30 text-[#8CFF00] text-xs font-mono font-bold">
-              <span>Selected Plan: </span>
-              <span>
-                {planHashrate.toLocaleString()} TH/s · {planDuration} Days · ${estimatedPriceUsd} USD
-              </span>
+            {/* Context Notice */}
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#0A0F18] border border-slate-200 dark:border-gray-800 text-left text-xs space-y-1.5">
+              <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold">
+                <CheckCircle2 className="w-4 h-4 text-[#8CFF00] shrink-0" />
+                <span>
+                  {isCheckout ? "Hashrate Order Preserved" : "Account Created Successfully"}
+                </span>
+              </div>
+              <p className="text-slate-500 dark:text-gray-400 text-[11px] leading-relaxed">
+                {isCheckout
+                  ? "Click the button in your confirmation email to verify your address. You will be redirected directly to NOWPayments checkout to finalize your contract."
+                  : "Click the verification link sent to your email to verify your address and access your TMF Customer Dashboard."}
+              </p>
             </div>
 
-            {/* 3 Step Guidance */}
-            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#0B1019] border border-slate-200 dark:border-[#1A2536] text-left text-xs space-y-2 text-slate-600 dark:text-gray-300">
-              <div className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-[#8CFF00]/20 text-[#8CFF00] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                  1
-                </span>
-                <span>Open the verification email from <strong>The Mining Future</strong>.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-[#8CFF00]/20 text-[#8CFF00] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                  2
-                </span>
-                <span>Click the <strong>Verify Email</strong> button inside.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-[#8CFF00]/20 text-[#8CFF00] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                  3
-                </span>
-                <span>You will be redirected automatically to complete your NOWPayments checkout.</span>
-              </div>
-            </div>
-
-            {/* Quick Webmail Button */}
+            {/* Primary Action: Open Webmail */}
             <a
               href={webmail.url}
               target="_blank"
@@ -314,23 +339,27 @@ function RegisterForm() {
                 <img
                   src="/tmf-logo.png"
                   alt="The Mining Future"
-                  className="h-9 sm:h-10 w-auto mx-auto object-contain drop-shadow-[0_0_15px_rgba(140,255,0,0.25)]"
+                  className="h-9 sm:h-10 w-auto object-contain drop-shadow-[0_0_15px_rgba(140,255,0,0.25)]"
                 />
               </Link>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                 Create TMF Account
               </h1>
               <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
-                Register to activate cloud hashrate and connect your stratum pool
+                {isCheckout
+                  ? "Register to activate cloud hashrate and connect your stratum pool"
+                  : "Register for your personal TMF Cloud portal and computing account"}
               </p>
 
-              {/* Selected Plan Badge (Without "Locked") */}
-              <div className="mt-3 py-1.5 px-3 rounded-lg bg-[#8CFF00]/10 border border-[#8CFF00]/30 text-[#8CFF00] text-[11px] font-mono font-bold flex items-center justify-center gap-1.5">
-                <span>Selected Plan:</span>
-                <span>
-                  {planHashrate.toLocaleString()} TH/s · {planDuration} Days · ${estimatedPriceUsd} USD
-                </span>
-              </div>
+              {/* Selected Plan Badge (ONLY SHOWN IF INITIATED FROM CHECKOUT) */}
+              {isCheckout && pendingPackage && planHashrate > 0 && (
+                <div className="mt-3 py-1.5 px-3 rounded-lg bg-[#8CFF00]/10 border border-[#8CFF00]/30 text-[#8CFF00] text-[11px] font-mono font-bold flex items-center justify-center gap-1.5">
+                  <span>Selected Plan:</span>
+                  <span>
+                    {planHashrate.toLocaleString()} TH/s · {planDuration} Days · ${estimatedPriceUsd} USD
+                  </span>
+                </div>
+              )}
             </div>
 
             {errorMessage && (
@@ -389,9 +418,12 @@ function RegisterForm() {
                 className="w-full mt-2 bg-[#8CFF00] text-black font-extrabold text-xs py-3 rounded-xl hover:bg-[#7EE800] transition-all shadow-[0_0_15px_rgba(140,255,0,0.25)] disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading ? (
-                  <span>Creating Account & Securing Order...</span>
+                  <span>Creating Account...</span>
                 ) : (
-                  <span>Create Account</span>
+                  <>
+                    <span>Create Account</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </>
                 )}
               </button>
             </form>
@@ -400,7 +432,7 @@ function RegisterForm() {
               <div>
                 Already have an account?{" "}
                 <Link
-                  href={`/login${returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ""}`}
+                  href={`/login${returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ""}${isCheckout ? "&checkout=true" : ""}`}
                   className="text-[#8CFF00] font-bold hover:underline ml-1"
                 >
                   Sign In
@@ -410,31 +442,19 @@ function RegisterForm() {
           </div>
         )}
       </div>
-
-      {/* ============================================================= */}
-      {/* ENTERPRISE TRUST BADGES (CLEAN ENERGY INFRASTRUCTURE)         */}
-      {/* ============================================================= */}
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-slate-500 dark:text-gray-400 max-w-md mx-auto text-center select-none">
-        <div className="flex items-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#8CFF00]" />
-          <span>256-Bit SSL Encrypted</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Lock className="w-3.5 h-3.5 text-[#8CFF00]" />
-          <span>Dedicated Stratum Routing</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Zap className="w-3.5 h-3.5 text-[#8CFF00]" />
-          <span>Clean Energy Infrastructure</span>
-        </div>
-      </div>
     </div>
   );
 }
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400">Loading registration...</div>}>
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-xs text-slate-400 font-mono">
+          Loading registration...
+        </div>
+      }
+    >
       <RegisterForm />
     </Suspense>
   );

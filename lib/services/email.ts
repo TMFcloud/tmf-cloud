@@ -138,14 +138,16 @@ export interface CustomerVerificationEmailParams {
   toEmail: string;
   fullName: string;
   verificationLink: string;
+  isCheckout?: boolean;
   hashrateTh?: number;
   durationDays?: number;
   totalUsd?: number;
 }
 
 /**
- * Dispatches a customer verification email containing their preserved purchase context.
- * Dispatches via Resend if available, with graceful fallback.
+ * Dispatches a customer verification email.
+ * - Checkout flow: preserves purchase order details with direct payment continuation.
+ * - Direct registration flow: clean account confirmation directing straight to dashboard.
  */
 export async function sendCustomerVerificationEmail(
   params: CustomerVerificationEmailParams
@@ -155,7 +157,7 @@ export async function sendCustomerVerificationEmail(
   messageId?: string;
   error?: string;
 }> {
-  const { toEmail, fullName, verificationLink, hashrateTh, durationDays, totalUsd } = params;
+  const { toEmail, fullName, verificationLink, isCheckout, hashrateTh, durationDays, totalUsd } = params;
   const resendApiKey = process.env.RESEND_API_KEY;
 
   if (resendApiKey) {
@@ -163,7 +165,7 @@ export async function sendCustomerVerificationEmail(
       const fromEmail =
         process.env.RESEND_FROM_EMAIL || "The Mining Future <onboarding@resend.dev>";
 
-      const planSection = hashrateTh
+      const planSection = isCheckout && hashrateTh
         ? `
         <div style="background: linear-gradient(135deg, rgba(163,255,0,0.12), rgba(163,255,0,0.02)); border: 1px solid #426000; border-radius: 12px; padding: 18px; margin: 22px 0; text-align: left;">
           <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: #929BAA; letter-spacing: 1px; margin-bottom: 8px;">Preserved Hashrate Order</div>
@@ -190,12 +192,32 @@ export async function sendCustomerVerificationEmail(
       `
         : "";
 
+      const emailSubject = isCheckout
+        ? "⚡ Verify Email & Continue Hashrate Purchase | The Mining Future"
+        : "⚡ Verify Your Email & Access Dashboard | The Mining Future";
+
+      const headline = isCheckout
+        ? "Verify Your Email & Complete Purchase"
+        : "Verify Your Email & Access Dashboard";
+
+      const introText = isCheckout
+        ? "Thank you for creating an account with <strong>The Mining Future (TMF)</strong>. Please confirm your email address to verify your customer account and proceed directly to secure payment."
+        : "Thank you for creating an account with <strong>The Mining Future (TMF)</strong>. Please confirm your email address to verify your customer account and access your personal TMF Customer Dashboard.";
+
+      const buttonText = isCheckout
+        ? "VERIFY EMAIL & CONTINUE TO PAYMENT &rarr;"
+        : "VERIFY EMAIL & ACCESS DASHBOARD &rarr;";
+
+      const footerNotice = isCheckout
+        ? "After verification, you will be automatically redirected to your NOWPayments crypto checkout."
+        : "After verification, you will be directed straight to your TMF Customer Dashboard.";
+
       const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Verify Your Email | The Mining Future</title>
+  <title>${emailSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #080B10; color: #F5F7FA; margin: 0; padding: 40px 20px; }
     .container { max-width: 560px; margin: 0 auto; background-color: #10151E; border: 1px solid #273244; border-radius: 16px; padding: 36px; }
@@ -214,18 +236,18 @@ export async function sendCustomerVerificationEmail(
       <div class="logo">⌘</div>
       <div class="brand">The Mining Future</div>
     </div>
-    <h1>Verify Your Email & Complete Purchase</h1>
+    <h1>${headline}</h1>
     <p>Hello <strong>${fullName || "Valued Client"}</strong>,</p>
-    <p>Thank you for creating an account with <strong>The Mining Future (TMF)</strong>. Please confirm your email address to verify your customer account and proceed directly to secure payment.</p>
+    <p>${introText}</p>
 
     ${planSection}
 
     <div style="text-align: center;">
-      <a href="${verificationLink}" class="btn" target="_blank">VERIFY EMAIL & CONTINUE TO PAYMENT &rarr;</a>
+      <a href="${verificationLink}" class="btn" target="_blank">${buttonText}</a>
     </div>
 
     <p style="font-size: 12px; color: #929BAA; text-align: center;">
-      After verification, you will be automatically redirected to your NOWPayments crypto checkout.
+      ${footerNotice}
     </p>
 
     <div class="footer">
@@ -246,7 +268,7 @@ export async function sendCustomerVerificationEmail(
         body: JSON.stringify({
           from: fromEmail,
           to: [toEmail],
-          subject: "⚡ Verify Email & Continue Hashrate Purchase | The Mining Future",
+          subject: emailSubject,
           html: htmlContent,
         }),
       });
@@ -261,5 +283,8 @@ export async function sendCustomerVerificationEmail(
     }
   }
 
-  return { success: true, provider: "supabase" };
+  return {
+    success: true,
+    provider: "generated_link",
+  };
 }

@@ -105,8 +105,8 @@ function EmailVerifiedContent() {
       // Direct payment page fallback
       window.location.href = `/payment?orderId=${order.id}`;
     } else {
-      // If no pending order, direct customer to package selection
-      router.push("/buy");
+      // If no pending order, direct customer to customer dashboard
+      router.push("/dashboard");
     }
   };
 

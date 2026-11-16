@@ -1331,6 +1331,15 @@ export default function DashboardPage() {
                   <span>Online</span>
                 </div>
 
+                {/* Primary Buy Hashrate Action */}
+                <Link
+                  href="/buy"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8CFF00] hover:bg-[#7EE800] text-black font-extrabold text-xs transition-all shadow-[0_0_15px_rgba(140,255,0,0.3)] hover:scale-[1.02]"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-black" />
+                  <span>BUY HASHRATE</span>
+                </Link>
+
                 {/* Light / Dark Mode Toggle */}
                 <button
                   type="button"
@@ -1884,14 +1893,14 @@ export default function DashboardPage() {
                         <NeonPickaxeGraphic />
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => openPurchaseModal()}
+                      <Link
+                        href="/buy"
                         className="mt-5 w-full py-2.5 rounded-xl bg-[#8CFF00] hover:bg-[#7EE800] text-black font-black text-xs transition-all flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(140,255,0,0.3)] z-10 cursor-pointer"
                       >
-                        <span>Choose Cloud Mining Plan</span>
+                        <Zap className="w-3.5 h-3.5 fill-black" />
+                        <span>BUY HASHRATE</span>
                         <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+                      </Link>
                     </>
                   )}
                 </div>

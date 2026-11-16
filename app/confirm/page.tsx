@@ -620,7 +620,7 @@ function ConfirmContent() {
                   const returnUrl = encodeURIComponent(
                     `/confirm?th=${hashrateTh}&days=${durationDays}&pay=${paymentCurrency}`
                   );
-                  window.location.href = `/register?returnUrl=${returnUrl}&th=${hashrateTh}&days=${durationDays}&pay=${paymentCurrency}`;
+                  window.location.href = `/register?checkout=true&returnUrl=${returnUrl}&th=${hashrateTh}&days=${durationDays}&pay=${paymentCurrency}`;
                 }}
                 className="w-full p-3.5 rounded-xl bg-[#121926] hover:bg-[#162133] border border-[#1E293B] hover:border-[#8CFF00]/50 transition-all text-left flex items-start gap-3 group cursor-pointer"
               >
@@ -649,7 +649,7 @@ function ConfirmContent() {
                   const returnUrl = encodeURIComponent(
                     `/confirm?th=${hashrateTh}&days=${durationDays}&pay=${paymentCurrency}`
                   );
-                  window.location.href = `/login?returnUrl=${returnUrl}&th=${hashrateTh}&days=${durationDays}&pay=${paymentCurrency}`;
+                  window.location.href = `/login?checkout=true&returnUrl=${returnUrl}&th=${hashrateTh}&days=${durationDays}&pay=${paymentCurrency}`;
                 }}
                 className="w-full p-3.5 rounded-xl bg-[#121926] hover:bg-[#162133] border border-[#1E293B] hover:border-[#8CFF00]/50 transition-all text-left flex items-start gap-3 group cursor-pointer"
               >
