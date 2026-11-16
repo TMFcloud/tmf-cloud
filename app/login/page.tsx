@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -9,7 +9,8 @@ import { Zap, AlertCircle, ArrowRight } from "lucide-react";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get("next") || searchParams.get("returnUrl") || "/dashboard";
+  const rawReturnUrl = searchParams.get("next") || searchParams.get("returnUrl") || "/dashboard";
+  const returnUrl = rawReturnUrl.startsWith("/login") ? "/dashboard" : rawReturnUrl;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,30 +18,69 @@ function LoginForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const supabase = createClient();
+  const isNavigating = useRef(false);
+
+  const navigateToDestination = (destination: string) => {
+    if (isNavigating.current) return;
+    isNavigating.current = true;
+    setLoading(true);
+
+    try {
+      router.replace(destination);
+      router.refresh();
+    } catch {}
+
+    if (typeof window !== "undefined") {
+      window.location.assign(destination);
+    }
+  };
 
   useEffect(() => {
     const err = searchParams.get("error");
     if (err === "verification_failed") {
       setErrorMessage("Verification link expired or invalid. Please sign in or request a new confirmation.");
     }
-  }, [searchParams]);
+
+    // Auto-redirect if already authenticated
+    async function checkExistingUser() {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (data?.user) {
+          navigateToDestination(returnUrl);
+        }
+      } catch {}
+    }
+    checkExistingUser();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || isNavigating.current) return;
+
     setLoading(true);
     setErrorMessage(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
         password,
       });
 
       if (error) {
         setErrorMessage(error.message);
         setLoading(false);
+        isNavigating.current = false;
         return;
       }
+
+      if (!data?.session) {
+        setErrorMessage("Authentication succeeded, but failed to initialize session. Please try again.");
+        setLoading(false);
+        isNavigating.current = false;
+        return;
+      }
+
+      let destination = returnUrl;
 
       // Restore pending package ONLY if customer came from checkout flow
       const isCheckoutLogin = Boolean(
@@ -56,8 +96,7 @@ function LoginForm() {
           try {
             const pending = JSON.parse(pendingRaw);
             if (pending && pending.hashrateTh) {
-              const { data: sessionData } = await supabase.auth.getSession();
-              const token = sessionData?.session?.access_token;
+              const token = data.session.access_token;
               const res = await fetch("/api/orders/create", {
                 method: "POST",
                 headers: {
@@ -77,13 +116,11 @@ function LoginForm() {
                   },
                 }),
               });
-              const data = await res.json();
-              if (data && data.orderId) {
+              const orderData = await res.json();
+              if (orderData && orderData.orderId) {
                 localStorage.removeItem("tmf_pending_pool");
-                localStorage.setItem("tmf_active_order_id", data.orderId);
-                router.push(`/payment?orderId=${data.orderId}`);
-                router.refresh();
-                return;
+                localStorage.setItem("tmf_active_order_id", orderData.orderId);
+                destination = `/payment?orderId=${orderData.orderId}`;
               }
             }
           } catch (e) {
@@ -92,11 +129,12 @@ function LoginForm() {
         }
       }
 
-      router.push(returnUrl);
-      router.refresh();
+      // Automatically navigate to dashboard or checkout destination
+      navigateToDestination(destination);
     } catch (err: any) {
       setErrorMessage(err.message || "An unexpected error occurred.");
       setLoading(false);
+      isNavigating.current = false;
     }
   };
 
