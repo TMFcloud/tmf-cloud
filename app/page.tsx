@@ -1,8 +1,18 @@
-import Link from "next/link";
-import { Zap, ShieldCheck, Activity, ArrowRight, Lock } from "lucide-react";
+import { ShieldCheck, Activity, ArrowRight, Lock } from "lucide-react";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import HeroLaunchButton from "@/components/HeroLaunchButton";
 
-export default function HomePage() {
+export default async function HomePage() {
   const wpUrl = process.env.NEXT_PUBLIC_WORDPRESS_URL || "https://www.theminingfuture.com";
+
+  let isAuthed = false;
+  try {
+    const supabase = createServerSupabaseClient();
+    const { data } = await supabase.auth.getUser();
+    isAuthed = Boolean(data.user);
+  } catch {
+    isAuthed = false;
+  }
 
   return (
     <div className="flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-12 sm:py-20 transition-colors duration-150">
@@ -32,13 +42,7 @@ export default function HomePage() {
 
       {/* Primary Actions */}
       <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full sm:w-auto">
-        <Link
-          href="/buy"
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#8CFF00] text-black font-extrabold text-sm px-7 py-3.5 rounded-xl hover:bg-[#7EE800] transition-all shadow-[0_0_20px_rgba(140,255,0,0.3)] hover:scale-[1.02]"
-        >
-          <Zap className="h-4 w-4 fill-black" />
-          <span>Launch Cloud Contract</span>
-        </Link>
+        <HeroLaunchButton initialIsAuthed={isAuthed} />
 
         <a
           href={wpUrl}

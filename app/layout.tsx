@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { ThemeProvider } from "@/components/ThemeContext";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,11 +10,20 @@ export const metadata: Metadata = {
   description: "Enterprise cloud hashrate portal. High-efficiency Bitcoin mining power hosted in Clean Energy Infrastructure with real-time Stratum telemetry.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  let initialUser = null;
+  try {
+    const supabase = createServerSupabaseClient();
+    const { data } = await supabase.auth.getUser();
+    initialUser = data.user ?? null;
+  } catch {
+    initialUser = null;
+  }
+
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
@@ -35,7 +45,7 @@ export default function RootLayout({
       </head>
       <body className="bg-[#F8FAFC] text-slate-900 dark:bg-[#000000] dark:text-[#F8FAFC] flex flex-col min-h-screen selection:bg-tmf-green selection:text-tmf-black transition-colors duration-150">
         <ThemeProvider>
-          <Navbar />
+          <Navbar initialUser={initialUser} />
           <main className="flex-1 flex flex-col">{children}</main>
           <Footer />
         </ThemeProvider>

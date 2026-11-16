@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Zap, ShieldCheck, User, LogOut, ExternalLink, Sun, Moon } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, User, LogOut, ExternalLink, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/components/ThemeContext";
+import { getPurchaseHref } from "@/lib/navigation";
 
-export default function Navbar() {
+export default function Navbar({ initialUser }: { initialUser?: any }) {
   const pathname = usePathname();
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(initialUser ?? null);
+  const [loading, setLoading] = useState(initialUser === undefined);
   const supabase = createClient();
   const { theme, toggleTheme } = useTheme();
 
@@ -21,6 +22,7 @@ export default function Navbar() {
         setUser(data.user);
       } catch {
         // Unauthenticated
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -29,6 +31,7 @@ export default function Navbar() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null);
+      setLoading(false);
     });
 
     return () => {
@@ -38,6 +41,7 @@ export default function Navbar() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
+    setUser(null);
     window.location.href = "/";
   };
 
@@ -47,6 +51,8 @@ export default function Navbar() {
   if (pathname?.startsWith("/dashboard") || pathname?.startsWith("/admin")) {
     return null;
   }
+
+  const isAuthed = Boolean(user);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-200 dark:border-gray-800 bg-white/95 dark:bg-[#07090E]/95 backdrop-blur-md transition-colors duration-150">
@@ -79,18 +85,30 @@ export default function Navbar() {
         {/* Center / Right Links */}
         <nav className="flex items-center gap-2 sm:gap-3">
           <Link
-            href="/buy"
-            className="text-xs font-bold text-slate-700 hover:text-[#8CFF00] dark:text-gray-300 dark:hover:text-[#8CFF00] transition-colors px-2.5 py-1.5 rounded-lg"
+            href={getPurchaseHref(isAuthed)}
+            className="text-xs font-bold text-slate-700 hover:text-[#8CFF00] dark:text-gray-300 dark:hover:text-[#8CFF00] transition-colors px-2 sm:px-2.5 py-1.5 rounded-lg"
           >
             Buy Hashrate
           </Link>
+
+          {/* Dashboard Button: Placed before theme toggle, only when signed in, outlined/secondary, icon-only on mobile */}
+          {!loading && isAuthed && (
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#8CFF00] border border-[#8CFF00]/40 hover:border-[#8CFF00] hover:bg-[#8CFF00]/10 bg-transparent px-2.5 sm:px-3 py-1.5 rounded-lg transition-all"
+              title="Dashboard"
+            >
+              <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </Link>
+          )}
 
           {/* Light / Dark Mode Toggle */}
           <button
             type="button"
             onClick={toggleTheme}
             aria-label="Toggle theme"
-            className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 border border-slate-200 dark:border-gray-800 transition-colors"
+            className="p-1.5 sm:p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 border border-slate-200 dark:border-gray-800 transition-colors"
             title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
             {theme === "dark" ? (
@@ -101,16 +119,9 @@ export default function Navbar() {
           </button>
 
           {loading ? (
-            <div className="h-8 w-16 bg-slate-200 dark:bg-gray-800 animate-pulse rounded-md" />
-          ) : user ? (
-            <div className="flex items-center gap-2 sm:gap-3">
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center gap-1.5 text-xs font-black text-black bg-[#8CFF00] px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg hover:bg-[#7EE800] transition-all shadow-[0_0_15px_rgba(140,255,0,0.25)]"
-              >
-                <ShieldCheck className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span className="hidden xs:inline">Dashboard</span>
-              </Link>
+            <div className="h-8 w-16 bg-slate-200 dark:bg-gray-800/60 animate-pulse rounded-md" />
+          ) : isAuthed ? (
+            <div className="flex items-center gap-1 sm:gap-2">
               <button
                 onClick={handleSignOut}
                 title="Sign out"
@@ -123,13 +134,13 @@ export default function Navbar() {
             <div className="flex items-center gap-1.5 sm:gap-2">
               <Link
                 href="/login"
-                className="text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white px-2.5 py-1.5 rounded-lg transition-colors"
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white px-2 sm:px-2.5 py-1.5 rounded-lg transition-colors"
               >
                 Log In
               </Link>
               <Link
                 href="/register"
-                className="inline-flex items-center gap-1 text-xs font-black text-black bg-[#8CFF00] px-3 py-1.5 sm:py-2 rounded-lg hover:bg-[#7EE800] transition-all shadow-[0_0_15px_rgba(140,255,0,0.25)]"
+                className="inline-flex items-center gap-1 text-xs font-black text-black bg-[#8CFF00] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-[#7EE800] transition-all shadow-[0_0_15px_rgba(140,255,0,0.25)]"
               >
                 <User className="h-3.5 w-3.5 stroke-[2.5]" />
                 <span>Register</span>

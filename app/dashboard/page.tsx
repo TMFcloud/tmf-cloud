@@ -418,6 +418,9 @@ export default function DashboardPage() {
       if (params.get("payment") === "success") {
         setShowPaymentSuccessBanner(true);
       }
+      if (params.get("action") === "buy" || params.get("buy") === "true") {
+        setShowPurchaseModal(true);
+      }
     }
   }, []);
 
