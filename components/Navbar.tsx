@@ -14,11 +14,6 @@ export default function Navbar() {
   const supabase = createClient();
   const { theme, toggleTheme } = useTheme();
 
-  // If on Dashboard or Admin, hide the marketing navbar so the app header is primary
-  if (pathname?.startsWith("/dashboard") || pathname?.startsWith("/admin")) {
-    return null;
-  }
-
   useEffect(() => {
     async function loadUser() {
       try {
@@ -47,6 +42,11 @@ export default function Navbar() {
   };
 
   const wpUrl = process.env.NEXT_PUBLIC_WORDPRESS_URL || "https://www.theminingfuture.com";
+
+  // If on Dashboard or Admin, hide the marketing navbar so the app header is primary
+  if (pathname?.startsWith("/dashboard") || pathname?.startsWith("/admin")) {
+    return null;
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-200 dark:border-gray-800 bg-white/95 dark:bg-[#07090E]/95 backdrop-blur-md transition-colors duration-150">

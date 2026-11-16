@@ -444,6 +444,8 @@ export default function DashboardPage() {
   const [purchaseSubmitting, setPurchaseSubmitting] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [purchaseSuccessMessage, setPurchaseSuccessMessage] = useState<string | null>(null);
+  const [baseRatePerThDay, setBaseRatePerThDay] = useState<number>(0.0309966);
+  const [estDailyBtcPerTh, setEstDailyBtcPerTh] = useState<number>(0.0000004738);
 
   // Support Ticket Form State
   const [ticketCategory, setTicketCategory] = useState("Stratum Pool Destination Change");
@@ -466,6 +468,30 @@ export default function DashboardPage() {
   const [billingCity, setBillingCity] = useState("");
   const [billingPostal, setBillingPostal] = useState("");
   const [billingCountry, setBillingCountry] = useState("United Arab Emirates");
+
+  // Sync live authoritative platform pricing & rates
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPricing = async () => {
+      try {
+        const res = await fetch("/api/public/pricing", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success && isMounted) {
+            if (data.baseRatePerThDay != null) setBaseRatePerThDay(Number(data.baseRatePerThDay));
+            if (data.estDailyBtcPerTh != null) setEstDailyBtcPerTh(Number(data.estDailyBtcPerTh));
+          }
+        }
+      } catch {}
+    };
+
+    fetchPricing();
+    const interval = setInterval(fetchPricing, 10000); // sync every 10s
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const depositCurrencies = [
     { id: "usdttrc20", symbol: "USDT", network: "TRC20", min: 5, label: "Tether (TRC20)" },
@@ -695,7 +721,7 @@ export default function DashboardPage() {
         endDate: c.end_date,
       };
     });
-  }, [contracts, poolConfigs, profileName]);
+  }, [contracts, poolConfigs, profileName, baseRatePerThDay]);
 
   // Derived Miners from actual Equalizer allocations
   const miners: MinerItem[] = useMemo(() => {
@@ -953,33 +979,6 @@ export default function DashboardPage() {
     { id: "Binance", name: "Binance Pool", url: "stratum+tcp://bs.poolbinance.com:3333" },
     { id: "Braiins", name: "Braiins Pool", url: "stratum+tcp://stratum.braiins.com:3333" },
   ];
-
-  const [baseRatePerThDay, setBaseRatePerThDay] = useState<number>(0.0309966);
-  const [estDailyBtcPerTh, setEstDailyBtcPerTh] = useState<number>(0.0000004738);
-
-  // Sync live authoritative platform pricing & rates
-  useEffect(() => {
-    let isMounted = true;
-    const fetchPricing = async () => {
-      try {
-        const res = await fetch("/api/public/pricing", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.success && isMounted) {
-            if (data.baseRatePerThDay != null) setBaseRatePerThDay(Number(data.baseRatePerThDay));
-            if (data.estDailyBtcPerTh != null) setEstDailyBtcPerTh(Number(data.estDailyBtcPerTh));
-          }
-        }
-      } catch {}
-    };
-
-    fetchPricing();
-    const interval = setInterval(fetchPricing, 10000); // sync every 10s
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   const purchaseTotalUsd = useMemo(() => {
     return Math.round(purchaseTh * purchaseDays * baseRatePerThDay * 100) / 100;

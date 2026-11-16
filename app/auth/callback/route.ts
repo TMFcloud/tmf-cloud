@@ -20,6 +20,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  const nextParam = requestUrl.searchParams.get("next");
   const flowParam = requestUrl.searchParams.get("flow");
   const orderIdParam =
     requestUrl.searchParams.get("orderId") ||
@@ -50,6 +51,10 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      if (nextParam) {
+        return NextResponse.redirect(new URL(nextParam, requestUrl.origin));
+      }
+
       // 1. Get authenticated user
       const { data: userData } = await supabase.auth.getUser();
       const user = userData?.user;
