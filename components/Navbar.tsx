@@ -37,7 +37,7 @@ export default function Navbar() {
     });
 
     return () => {
-      authListener?.subscription.unsubscribe();
+      authListener?.subscription?.unsubscribe();
     };
   }, []);
 

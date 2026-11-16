@@ -103,35 +103,11 @@ export async function POST(req: NextRequest) {
     const role = body.role || "operations";
     const department = body.department || "TMF Enterprise Operations";
 
-    // 1. Strict Domain Validation: ONLY @theminingfuture.com or @themingfuture.com
-    if (!rawEmail) {
+    // 1. Email format validation
+    if (!rawEmail || !rawEmail.includes("@")) {
       return NextResponse.json(
-        { success: false, error: "Please enter an email address." },
+        { success: false, error: "Please enter a valid email address." },
         { status: 400 }
-      );
-    }
-
-    if (isPublicEmailDomain(rawEmail)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "ACCESS DENIED: Public email providers (@gmail.com, @outlook.com, @yahoo.com, etc.) are strictly prohibited from accessing the TMF Admin Operations Console. You must use an authorized organizational email ending with @theminingfuture.com.",
-          domainBlocked: true,
-        },
-        { status: 403 }
-      );
-    }
-
-    if (!isValidAdminEmail(rawEmail)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "ACCESS RESTRICTED: Only organizational accounts ending with @theminingfuture.com are authorized to access this portal.",
-          domainBlocked: true,
-        },
-        { status: 403 }
       );
     }
 

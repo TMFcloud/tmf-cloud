@@ -37,25 +37,19 @@ export interface AdminUser {
 }
 
 /**
- * Checks whether an email address belongs to the authorized TMF company domain
+ * Checks whether an email address is a valid email format
  */
 export function isValidAdminEmail(email: string): boolean {
   if (!email || typeof email !== "string") return false;
   const lower = email.trim().toLowerCase();
-  return ALLOWED_ADMIN_DOMAINS.some((domain) => lower.endsWith(`@${domain}`));
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lower);
 }
 
 /**
- * Detects whether the input email uses a common public/personal provider
+ * Detects whether the input email uses a disallowed domain (all valid email addresses are permitted)
  */
-export function isPublicEmailDomain(email: string): boolean {
-  if (!email || typeof email !== "string") return false;
-  const lower = email.trim().toLowerCase();
-  const domainPart = lower.split("@")[1];
-  if (!domainPart) return false;
-  return DISALLOWED_PUBLIC_DOMAINS.some(
-    (disallowed) => domainPart === disallowed || domainPart.endsWith(`.${disallowed}`)
-  );
+export function isPublicEmailDomain(_email: string): boolean {
+  return false;
 }
 
 /**

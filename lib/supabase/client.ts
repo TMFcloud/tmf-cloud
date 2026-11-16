@@ -1,23 +1,20 @@
 import { createBrowserClient } from "@supabase/ssr";
 
-export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+let browserClient: ReturnType<typeof createBrowserClient> | null = null;
 
-  return createBrowserClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      fetch: (url: any, options?: any) => {
-        // Return immediately for placeholder URLs to prevent browser timeout hangs
-        if (typeof url === "string" && url.includes("placeholder.supabase.co")) {
-          return Promise.resolve(
-            new Response(JSON.stringify({ data: null, error: null }), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            })
-          );
-        }
-        return fetch(url, options);
-      },
-    },
-  });
+export function createClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://srgfsjyopuujhpljfpkw.supabase.co";
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    "sb_publishable_Vj8W3awA7qBfac8TlnxFXA_KJrVkifR";
+
+  if (typeof window === "undefined") {
+    return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  }
+
+  if (!browserClient) {
+    browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey);
+  }
+
+  return browserClient;
 }

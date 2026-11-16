@@ -402,13 +402,13 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    const cleanHandle = inviteStaffHandle.trim().toLowerCase().replace(/@.*$/, "");
-    if (!cleanHandle) {
-      alert("Please enter a staff email handle before @theminingfuture.com (e.g. subesh.m).");
+    const rawHandle = inviteStaffHandle.trim().toLowerCase();
+    if (!rawHandle) {
+      alert("Please enter the staff member's email address.");
       return;
     }
 
-    const finalEmail = `${cleanHandle}@theminingfuture.com`;
+    const finalEmail = rawHandle.includes("@") ? rawHandle : `${rawHandle}@theminingfuture.com`;
 
     setInvitingStaff(true);
     try {
@@ -2555,22 +2555,17 @@ export default function AdminDashboardPage() {
                         />
                       </div>
 
-                      {/* Enterprise Email - Single Clean Suffix Badge (Zero Duplication) */}
+                      {/* Staff Email */}
                       <div className="space-y-1">
                         <label className="text-[10px] text-slate-400 font-bold uppercase">Staff Email ID</label>
-                        <div className="flex items-center rounded-xl bg-[#0A0D14] border border-[#1A2332] focus-within:border-[#8CFF00] overflow-hidden">
-                          <input
-                            type="text"
-                            required
-                            value={inviteStaffHandle}
-                            onChange={(e) => setInviteStaffHandle(e.target.value.replace(/@.*$/, "").trim().toLowerCase())}
-                            placeholder="e.g. subesh.m"
-                            className="w-full px-3 py-2 bg-transparent text-white font-mono text-xs focus:outline-none"
-                          />
-                          <span className="px-3 py-2 bg-[#151C27] text-[#8CFF00] font-mono text-xs font-bold border-l border-[#1A2332] select-none shrink-0">
-                            @theminingfuture.com
-                          </span>
-                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={inviteStaffHandle}
+                          onChange={(e) => setInviteStaffHandle(e.target.value.trim().toLowerCase())}
+                          placeholder="e.g. subesh@theminingfuture.com or colleague@example.com"
+                          className="w-full px-3 py-2 rounded-xl bg-[#0A0D14] border border-[#1A2332] text-white font-mono text-xs focus:border-[#8CFF00] focus:outline-none"
+                        />
                       </div>
 
                       {/* Operations Role */}

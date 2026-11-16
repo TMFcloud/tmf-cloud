@@ -323,25 +323,23 @@ export default function DeveloperCenter() {
             </div>
 
             {/* NOWPayments Gateway */}
-            <div className="p-4 rounded-2xl bg-[#10151E] border border-[#1A2332] shadow-md space-y-2">
+            <div className="p-4 rounded-2xl bg-[#10151E] border border-[#1A2332] shadow-md space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Payment Gateway</span>
                 <CreditCard className="w-4 h-4 text-yellow-400" />
               </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-lg font-black font-mono text-white">NOWPayments</span>
-                <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setActiveDevTab("integrations")}
-                  className="px-3 py-1.5 rounded-xl bg-[#8CFF00] hover:bg-[#7EE800] text-black font-black text-xs transition-all flex items-center gap-1.5 shadow-[0_0_15px_rgba(140,255,0,0.2)]"
-                >
-                  <KeyRound className="w-3.5 h-3.5 fill-black" />
-                  <span>Configure API Keys in Vault →</span>
-                </button>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-lg font-black font-mono text-white truncate">NOWPayments</span>
                 {renderStatusBadge(healthData?.services?.nowpayments?.status || "Not Configured")}
               </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setActiveDevTab("integrations")}
+                className="w-full py-1.5 px-2.5 rounded-xl bg-[#8CFF00]/10 hover:bg-[#8CFF00] text-[#8CFF00] hover:text-black border border-[#8CFF00]/30 font-bold text-[11px] transition-all flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <KeyRound className="w-3 h-3" />
+                <span>Configure in Vault →</span>
+              </button>
               <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pt-1 border-t border-[#1A2332]">
                 <span>Gateway Mode</span>
                 <span className="text-amber-400 font-bold uppercase">{healthData?.services?.nowpayments?.mode || "sandbox"}</span>
@@ -349,25 +347,23 @@ export default function DeveloperCenter() {
             </div>
 
             {/* Equalizer Telemetry */}
-            <div className="p-4 rounded-2xl bg-[#10151E] border border-[#1A2332] shadow-md space-y-2">
+            <div className="p-4 rounded-2xl bg-[#10151E] border border-[#1A2332] shadow-md space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Equalizer Fleet</span>
                 <Sliders className="w-4 h-4 text-[#8CFF00]" />
               </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-lg font-black font-mono text-white">Enterprise Fleet</span>
-                <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setActiveDevTab("integrations")}
-                  className="px-3 py-1.5 rounded-xl bg-[#8CFF00] hover:bg-[#7EE800] text-black font-black text-xs transition-all flex items-center gap-1.5 shadow-[0_0_15px_rgba(140,255,0,0.2)]"
-                >
-                  <KeyRound className="w-3.5 h-3.5 fill-black" />
-                  <span>Configure API Keys in Vault →</span>
-                </button>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-lg font-black font-mono text-white truncate">Enterprise Fleet</span>
                 {renderStatusBadge(healthData?.services?.equalizer?.status || "Not Configured")}
               </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setActiveDevTab("integrations")}
+                className="w-full py-1.5 px-2.5 rounded-xl bg-[#8CFF00]/10 hover:bg-[#8CFF00] text-[#8CFF00] hover:text-black border border-[#8CFF00]/30 font-bold text-[11px] transition-all flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <KeyRound className="w-3 h-3" />
+                <span>Configure in Vault →</span>
+              </button>
               <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pt-1 border-t border-[#1A2332]">
                 <span>ASIC Fleet</span>
                 <span className="text-white font-bold">{healthData?.services?.equalizer?.physicalFleetCount || 0} Connected</span>
