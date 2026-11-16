@@ -1,0 +1,441 @@
+"use client";
+
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import {
+  Zap,
+  AlertCircle,
+  CheckCircle2,
+  Mail,
+  ExternalLink,
+  ShieldCheck,
+  Lock,
+  ArrowRight,
+  RefreshCw,
+} from "lucide-react";
+
+function RegisterForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnUrl = searchParams.get("returnUrl") || "/dashboard";
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Success state: hides form and shows dedicated "Check Your Inbox" state
+  const [submittedSuccess, setSubmittedSuccess] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState("");
+  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+
+  // Resend cooldown state
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
+  const [resendNotice, setResendNotice] = useState<string | null>(null);
+
+  const [pendingPackage, setPendingPackage] = useState<any | null>(null);
+
+  // Restore pending package info if available
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const pendingRaw = localStorage.getItem("tmf_pending_pool");
+      if (pendingRaw) {
+        try {
+          const parsed = JSON.parse(pendingRaw);
+          if (parsed && parsed.hashrateTh) {
+            setPendingPackage(parsed);
+          }
+        } catch {}
+      }
+    }
+  }, []);
+
+  // Handle Resend Cooldown Timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  // Dynamic platform base lease rate
+  const [baseRate, setBaseRate] = useState<number>(0.0309966);
+
+  useEffect(() => {
+    fetch("/api/public/pricing", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && data?.baseRatePerThDay) {
+          setBaseRate(Number(data.baseRatePerThDay));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Calculated package price (WITHOUT "Locked")
+  const planHashrate = Number(pendingPackage?.hashrateTh || 10);
+  const planDuration = Number(pendingPackage?.durationDays || 30);
+  const estimatedPriceUsd = (planHashrate * planDuration * baseRate).toFixed(2);
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMessage(null);
+
+    if (password.length < 8) {
+      setErrorMessage("Password must be at least 8 characters long.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // 1. Submit to authoritative registration endpoint
+      // Stores original order in Supabase BEFORE sending verification email
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          fullName,
+          pendingPackage: {
+            hashrateTh: planHashrate,
+            durationDays: planDuration,
+            paymentCurrency: pendingPackage?.paymentCurrency || "USDT_TRC20",
+            poolProvider: pendingPackage?.poolProvider || "ViaBTC",
+            stratumUrl: pendingPackage?.stratumUrl || "stratum+tcp://btc.viabtc.top:3333",
+            workerName: pendingPackage?.workerName || "worker1",
+            workerPassword: pendingPackage?.workerPassword || "x",
+          },
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.error || "Failed to create customer account.");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Persist active order ID locally for fast client reference
+      if (data.orderId) {
+        setCreatedOrderId(data.orderId);
+        localStorage.setItem("tmf_active_order_id", data.orderId);
+      }
+
+      // 3. Transition UI to dedicated "Check Your Inbox" state
+      setSubmittedEmail(email.trim().toLowerCase());
+      setSubmittedSuccess(true);
+      setResendCooldown(45);
+      setLoading(false);
+    } catch (err: any) {
+      setErrorMessage(err.message || "An unexpected network error occurred.");
+      setLoading(false);
+    }
+  };
+
+  // Handle Resend Verification Email
+  const handleResendEmail = async () => {
+    if (resendCooldown > 0 || resending || !submittedEmail) return;
+    setResending(true);
+    setResendNotice(null);
+
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: submittedEmail,
+          password,
+          fullName,
+          pendingPackage,
+        }),
+      });
+      const data = await res.json();
+      setResending(false);
+      setResendCooldown(60);
+      setResendNotice("Verification link re-sent! Please check your inbox.");
+      setTimeout(() => setResendNotice(null), 5000);
+    } catch {
+      setResending(false);
+      setResendNotice("Failed to resend. Please try again shortly.");
+    }
+  };
+
+  // Identify webmail URL for one-click button
+  const getWebmailUrl = (emailStr: string) => {
+    const domain = emailStr.split("@")[1]?.toLowerCase() || "";
+    if (domain === "gmail.com" || domain === "googlemail.com") {
+      return { name: "Open Gmail", url: "https://mail.google.com" };
+    }
+    if (domain === "outlook.com" || domain === "hotmail.com" || domain === "live.com") {
+      return { name: "Open Outlook", url: "https://outlook.live.com" };
+    }
+    if (domain === "yahoo.com" || domain === "ymail.com") {
+      return { name: "Open Yahoo Mail", url: "https://mail.yahoo.com" };
+    }
+    if (domain === "icloud.com" || domain === "me.com") {
+      return { name: "Open iCloud Mail", url: "https://www.icloud.com/mail" };
+    }
+    return { name: "Open Email Client", url: "mailto:" };
+  };
+
+  const webmail = getWebmailUrl(submittedEmail);
+
+  return (
+    <div className="mx-auto max-w-md w-full px-3 sm:px-6 py-8 sm:py-14 transition-colors duration-150">
+      <div className="bg-white dark:bg-[#07090E] border border-slate-200 dark:border-gray-800 rounded-2xl p-5 sm:p-8 shadow-sm dark:shadow-[0_0_30px_rgba(140,255,0,0.12)]">
+        {/* ============================================================= */}
+        {/* STATE A: DEDICATED "CHECK YOUR INBOX" STATE (FORM HIDDEN)     */}
+        {/* ============================================================= */}
+        {submittedSuccess ? (
+          <div className="text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            {/* Logo Header */}
+            <div className="flex justify-center mb-1">
+              <Link href="/" className="hover:opacity-90 transition-opacity">
+                <img
+                  src="/tmf-logo.png"
+                  alt="The Mining Future"
+                  className="h-8 w-auto object-contain"
+                />
+              </Link>
+            </div>
+
+            {/* Animated Glow Icon */}
+            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#8CFF00]/15 border-2 border-[#8CFF00] text-[#8CFF00] shadow-[0_0_25px_rgba(140,255,0,0.4)]">
+              <Mail className="h-7 w-7" />
+            </div>
+
+            <div>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                Check Your Email
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
+                We sent a secure verification link to:
+              </p>
+              <div className="mt-2 py-1.5 px-3 rounded-xl bg-slate-100 dark:bg-[#0F1622] border border-slate-200 dark:border-[#223044] text-xs font-mono font-bold text-slate-900 dark:text-[#8CFF00] select-all break-all">
+                {submittedEmail}
+              </div>
+            </div>
+
+            {/* Selected Plan Badge (Without "Locked") */}
+            <div className="py-2 px-3 rounded-xl bg-[#8CFF00]/10 border border-[#8CFF00]/30 text-[#8CFF00] text-xs font-mono font-bold">
+              <span>Selected Plan: </span>
+              <span>
+                {planHashrate.toLocaleString()} TH/s · {planDuration} Days · ${estimatedPriceUsd} USD
+              </span>
+            </div>
+
+            {/* 3 Step Guidance */}
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#0B1019] border border-slate-200 dark:border-[#1A2536] text-left text-xs space-y-2 text-slate-600 dark:text-gray-300">
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-[#8CFF00]/20 text-[#8CFF00] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                  1
+                </span>
+                <span>Open the verification email from <strong>The Mining Future</strong>.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-[#8CFF00]/20 text-[#8CFF00] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                  2
+                </span>
+                <span>Click the <strong>Verify Email</strong> button inside.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-[#8CFF00]/20 text-[#8CFF00] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                  3
+                </span>
+                <span>You will be redirected automatically to complete your NOWPayments checkout.</span>
+              </div>
+            </div>
+
+            {/* Quick Webmail Button */}
+            <a
+              href={webmail.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-[#8CFF00] hover:bg-[#7EE800] text-black font-extrabold text-xs py-3.5 rounded-xl transition-all shadow-[0_0_18px_rgba(140,255,0,0.3)] flex items-center justify-center gap-2"
+            >
+              <span>{webmail.name}</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+
+            {/* Resend Notice */}
+            {resendNotice && (
+              <div className="p-2.5 rounded-lg bg-[#8CFF00]/10 border border-[#8CFF00]/30 text-[11px] text-[#8CFF00] flex items-center justify-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>{resendNotice}</span>
+              </div>
+            )}
+
+            {/* Resend Link and Reset Email */}
+            <div className="pt-2 flex flex-col items-center gap-2 text-xs text-slate-500 dark:text-gray-400">
+              <button
+                type="button"
+                disabled={resendCooldown > 0 || resending}
+                onClick={handleResendEmail}
+                className="hover:text-white underline disabled:opacity-50 disabled:no-underline flex items-center gap-1.5"
+              >
+                {resending ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>Resending email...</span>
+                  </>
+                ) : resendCooldown > 0 ? (
+                  <span>Resend email in {resendCooldown}s</span>
+                ) : (
+                  <span>Didn&apos;t receive email? Resend verification</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmittedSuccess(false);
+                  setErrorMessage(null);
+                }}
+                className="text-slate-400 hover:text-[#8CFF00] text-[11px] underline"
+              >
+                Entered wrong address? Use another email
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ============================================================= */
+          /* STATE B: REGISTRATION FORM                                    */
+          /* ============================================================= */
+          <div>
+            <div className="text-center mb-6">
+              <Link href="/" className="inline-block mb-3 hover:opacity-90 transition-opacity">
+                <img
+                  src="/tmf-logo.png"
+                  alt="The Mining Future"
+                  className="h-9 sm:h-10 w-auto mx-auto object-contain drop-shadow-[0_0_15px_rgba(140,255,0,0.25)]"
+                />
+              </Link>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                Create TMF Account
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
+                Register to activate cloud hashrate and connect your stratum pool
+              </p>
+
+              {/* Selected Plan Badge (Without "Locked") */}
+              <div className="mt-3 py-1.5 px-3 rounded-lg bg-[#8CFF00]/10 border border-[#8CFF00]/30 text-[#8CFF00] text-[11px] font-mono font-bold flex items-center justify-center gap-1.5">
+                <span>Selected Plan:</span>
+                <span>
+                  {planHashrate.toLocaleString()} TH/s · {planDuration} Days · ${estimatedPriceUsd} USD
+                </span>
+              </div>
+            </div>
+
+            {errorMessage && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-500 dark:text-red-400 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleRegister} className="space-y-3.5">
+              <div>
+                <label className="text-xs text-slate-700 dark:text-gray-300 font-bold block mb-1">
+                  FULL NAME
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="e.g. Satoshi Nakamoto"
+                  className="w-full bg-slate-50 dark:bg-[#0C1019] border border-slate-300 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-[#8CFF00]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-700 dark:text-gray-300 font-bold block mb-1">
+                  EMAIL ADDRESS
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  className="w-full bg-slate-50 dark:bg-[#0C1019] border border-slate-300 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-[#8CFF00]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-700 dark:text-gray-300 font-bold block mb-1">
+                  PASSWORD (8+ CHARACTERS)
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-50 dark:bg-[#0C1019] border border-slate-300 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-[#8CFF00]"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-2 bg-[#8CFF00] text-black font-extrabold text-xs py-3 rounded-xl hover:bg-[#7EE800] transition-all shadow-[0_0_15px_rgba(140,255,0,0.25)] disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <span>Creating Account & Securing Order...</span>
+                ) : (
+                  <span>Create Account</span>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-gray-800 text-center text-xs text-slate-500 dark:text-gray-400 space-y-2">
+              <div>
+                Already have an account?{" "}
+                <Link
+                  href={`/login${returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ""}`}
+                  className="text-[#8CFF00] font-bold hover:underline ml-1"
+                >
+                  Sign In
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ============================================================= */}
+      {/* ENTERPRISE TRUST BADGES (CLEAN ENERGY INFRASTRUCTURE)         */}
+      {/* ============================================================= */}
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-slate-500 dark:text-gray-400 max-w-md mx-auto text-center select-none">
+        <div className="flex items-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-[#8CFF00]" />
+          <span>256-Bit SSL Encrypted</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Lock className="w-3.5 h-3.5 text-[#8CFF00]" />
+          <span>Dedicated Stratum Routing</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Zap className="w-3.5 h-3.5 text-[#8CFF00]" />
+          <span>Clean Energy Infrastructure</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400">Loading registration...</div>}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
